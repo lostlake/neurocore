@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 
 struct ContentView: View {
     @EnvironmentObject var sessionManager: SessionManager
@@ -236,6 +237,7 @@ struct FavoriteChip: View {
             Image(systemName: mode.icon)
                 .font(.caption)
                 .foregroundColor(mode.color)
+                .accessibilityHidden(true)
 
             Text(mode.name)
                 .font(.caption)
@@ -251,6 +253,7 @@ struct FavoriteChip: View {
             Capsule()
                 .stroke(mode.color.opacity(0.4), lineWidth: 1)
         )
+        .accessibilityLabel("\(mode.name), favorite")
     }
 }
 
@@ -291,6 +294,7 @@ struct ModeCard: View {
                     .font(.system(size: 18))
                     .foregroundColor(mode.color)
             }
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -302,6 +306,7 @@ struct ModeCard: View {
                         Image(systemName: "star.fill")
                             .font(.caption2)
                             .foregroundColor(.yellow)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -316,6 +321,7 @@ struct ModeCard: View {
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
@@ -323,6 +329,9 @@ struct ModeCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.gray.opacity(0.15))
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(mode.name)\(isFavorite ? ", favorite" : "")")
+        .accessibilityHint(mode.description)
     }
 }
 

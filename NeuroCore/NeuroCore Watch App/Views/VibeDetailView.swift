@@ -1,4 +1,5 @@
 import SwiftUI
+import WatchKit
 
 struct VibeDetailView: View {
     @EnvironmentObject var sessionManager: SessionManager
@@ -37,7 +38,9 @@ struct VibeDetailView: View {
         .navigationTitle(mode.name)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            intensity = sessionManager.intensity
+            // Clamp intensity to mode's valid range
+            let savedIntensity = sessionManager.intensity
+            intensity = min(mode.maxIntensity, max(mode.minIntensity, savedIntensity))
             selectedDuration = sessionManager.duration
         }
         .sheet(isPresented: $showScheduleSheet) {
