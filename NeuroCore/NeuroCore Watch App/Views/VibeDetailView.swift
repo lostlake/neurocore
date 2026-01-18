@@ -196,37 +196,36 @@ struct VibeDetailView: View {
     }
 
     private var secondaryActions: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 20) {
             Button(action: toggleFavorite) {
-                VStack(spacing: 4) {
+                VStack(spacing: 6) {
                     Image(systemName: sessionManager.isFavorite(mode: mode) ? "star.fill" : "star")
-                        .font(.title3)
+                        .font(.title2)
                         .foregroundColor(sessionManager.isFavorite(mode: mode) ? .yellow : .secondary)
 
-                    Text(sessionManager.isFavorite(mode: mode) ? "Favorited" : "Favorite")
-                        .font(.caption2)
+                    Text(sessionManager.isFavorite(mode: mode) ? "Saved" : "Save")
+                        .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                .frame(minWidth: 60, minHeight: 50)
             }
             .buttonStyle(PlainButtonStyle())
 
-            Divider()
-                .frame(height: 40)
-
             Button(action: { showScheduleSheet = true }) {
-                VStack(spacing: 4) {
-                    Image(systemName: "clock.badge.plus")
-                        .font(.title3)
+                VStack(spacing: 6) {
+                    Image(systemName: "calendar.badge.plus")
+                        .font(.title2)
                         .foregroundColor(.secondary)
 
                     Text("Schedule")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                .frame(minWidth: 60, minHeight: 50)
             }
             .buttonStyle(PlainButtonStyle())
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
     }
 
     private func startSession() {
@@ -349,9 +348,9 @@ struct DayToggle: View {
     var body: some View {
         Button(action: action) {
             Text(name)
-                .font(.caption2)
+                .font(.caption)
                 .fontWeight(isSelected ? .semibold : .regular)
-                .frame(width: 32, height: 32)
+                .frame(width: 38, height: 38)
                 .background(
                     Circle()
                         .fill(isSelected ? color : Color.gray.opacity(0.3))
@@ -397,12 +396,12 @@ struct DurationChip: View {
     var body: some View {
         Button(action: action) {
             Text(formattedDuration)
-                .font(.caption)
+                .font(.footnote)
                 .fontWeight(isSelected ? .semibold : .regular)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(isSelected ? color : Color.gray.opacity(0.3))
                 )
                 .foregroundColor(isSelected ? .white : .primary)
