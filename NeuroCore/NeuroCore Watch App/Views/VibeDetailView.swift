@@ -8,6 +8,7 @@ struct VibeDetailView: View {
     @State private var intensity: Double = 0.5
     @State private var selectedDuration: TimeInterval = 30 * 60
     @State private var isPreviewing = false
+    @State private var showScheduleSheet = false
 
     private let durationOptions: [TimeInterval] = [
         15 * 60,
@@ -28,6 +29,8 @@ struct VibeDetailView: View {
                 durationPicker
 
                 actionButtons
+
+                secondaryActions
             }
             .padding(.horizontal)
         }
@@ -36,6 +39,9 @@ struct VibeDetailView: View {
         .onAppear {
             intensity = sessionManager.intensity
             selectedDuration = sessionManager.duration
+        }
+        .sheet(isPresented: $showScheduleSheet) {
+            ScheduleSessionView(mode: mode)
         }
     }
 
@@ -186,6 +192,40 @@ struct VibeDetailView: View {
         .padding(.top, 8)
     }
 
+    private var secondaryActions: some View {
+        HStack(spacing: 16) {
+            Button(action: toggleFavorite) {
+                VStack(spacing: 4) {
+                    Image(systemName: sessionManager.isFavorite(mode: mode) ? "star.fill" : "star")
+                        .font(.title3)
+                        .foregroundColor(sessionManager.isFavorite(mode: mode) ? .yellow : .secondary)
+
+                    Text(sessionManager.isFavorite(mode: mode) ? "Favorited" : "Favorite")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Divider()
+                .frame(height: 40)
+
+            Button(action: { showScheduleSheet = true }) {
+                VStack(spacing: 4) {
+                    Image(systemName: "clock.badge.plus")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+
+                    Text("Schedule")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, 8)
+    }
+
     private func startSession() {
         sessionManager.updateIntensity(intensity)
         sessionManager.setDuration(selectedDuration)
@@ -205,6 +245,117 @@ struct VibeDetailView: View {
                 isPreviewing = false
             }
         }
+    }
+
+    private func toggleFavorite() {
+        sessionManager.toggleFavorite(mode: mode)
+        WKInterfaceDevice.current().play(.click)
+    }
+}
+
+struct ScheduleSessionView: View {
+    @EnvironmentObject var sessionManager: SessionManager
+    @Environment(\.dismiss) var dismiss
+
+    let mode: VibeMode
+    @State private var selectedTime = Date()
+    @State private var selectedDays: Set<Int> = []
+
+    private let dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                Text("Schedule \(mode.name)")
+                    .font(.headline)
+                    .padding(.top)
+
+                DatePicker("Time", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Repeat")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(0..<7) { index in
+                                let day = index + 1
+                                DayToggle(
+                                    name: dayNames[index],
+                                    isSelected: selectedDays.contains(day),
+                                    color: mode.color
+                                ) {
+                                    if selectedDays.contains(day) {
+                                        selectedDays.remove(day)
+                                    } else {
+                                        selectedDays.insert(day)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if selectedDays.isEmpty {
+                        Text("One-time reminder")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Button(action: scheduleSession) {
+                    HStack {
+                        Image(systemName: "calendar.badge.plus")
+                        Text("Schedule")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(mode.color)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button("Cancel") {
+                    dismiss()
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    private func scheduleSession() {
+        sessionManager.scheduleSession(mode: mode, time: selectedTime, repeatDays: selectedDays)
+        WKInterfaceDevice.current().play(.success)
+        dismiss()
+    }
+}
+
+struct DayToggle: View {
+    let name: String
+    let isSelected: Bool
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(name)
+                .font(.caption2)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle()
+                        .fill(isSelected ? color : Color.gray.opacity(0.3))
+                )
+                .foregroundColor(isSelected ? .white : .primary)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

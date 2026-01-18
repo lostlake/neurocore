@@ -21,7 +21,11 @@ struct SettingsView: View {
             VStack(spacing: 20) {
                 defaultsSection
 
+                scheduledSection
+
                 historySection
+
+                streakSection
 
                 aboutSection
             }
@@ -86,6 +90,55 @@ struct SettingsView: View {
         }
     }
 
+    private var scheduledSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Scheduled")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+
+                Spacer()
+
+                if !sessionManager.scheduledSessions.isEmpty {
+                    Text("\(sessionManager.scheduledSessions.count)")
+                        .font(.caption2)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.blue))
+                }
+            }
+
+            VStack(spacing: 8) {
+                if sessionManager.scheduledSessions.isEmpty {
+                    HStack {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundColor(.secondary)
+                        Text("No scheduled sessions")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                } else {
+                    ForEach(Array(sessionManager.scheduledSessions.enumerated()), id: \.element.id) { index, session in
+                        ScheduledSessionRow(
+                            session: session,
+                            onToggle: { sessionManager.toggleScheduledSession(at: index) },
+                            onDelete: { sessionManager.removeScheduledSession(at: index) }
+                        )
+                    }
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.15))
+            )
+        }
+    }
+
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("History")
@@ -112,6 +165,20 @@ struct SettingsView: View {
                         .foregroundColor(.blue)
                 }
 
+                if let mostUsed = sessionManager.mostUsedMode() {
+                    Divider()
+
+                    HStack {
+                        Text("Most Used")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(mostUsed)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                    }
+                }
+
                 Divider()
 
                 NavigationLink(destination: SessionHistoryView()) {
@@ -125,6 +192,52 @@ struct SettingsView: View {
                     }
                 }
             }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.15))
+            )
+        }
+    }
+
+    private var streakSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Streaks")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+
+            HStack(spacing: 16) {
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .foregroundColor(.orange)
+                        Text("\(sessionManager.currentStreak)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                    }
+                    Text("Current")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Divider()
+                    .frame(height: 40)
+
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trophy.fill")
+                            .foregroundColor(.yellow)
+                        Text("\(sessionManager.longestStreak)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                    }
+                    Text("Best")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity)
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
@@ -171,6 +284,48 @@ struct SettingsView: View {
             return "\(hours)h \(minutes)m"
         }
         return "\(minutes)m"
+    }
+}
+
+struct ScheduledSessionRow: View {
+    let session: ScheduledSession
+    let onToggle: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(session.modeName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(session.isEnabled ? .primary : .secondary)
+
+                HStack(spacing: 4) {
+                    Text(session.formattedTime)
+                    Text("•")
+                    Text(session.repeatDescription)
+                }
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Button(action: onToggle) {
+                Image(systemName: session.isEnabled ? "bell.fill" : "bell.slash")
+                    .font(.caption)
+                    .foregroundColor(session.isEnabled ? .blue : .secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(.vertical, 4)
     }
 }
 

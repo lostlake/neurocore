@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import HealthKit
 import WatchKit
+import UserNotifications
 
 class SessionManager: ObservableObject {
     @Published var activeSession: VibeSession?
@@ -12,22 +13,38 @@ class SessionManager: ObservableObject {
     @Published var elapsedTime: TimeInterval = 0
     @Published var isPaused = false
     @Published var recentSessions: [SessionRecord] = []
+    @Published var favorites: [String] = []
+    @Published var scheduledSessions: [ScheduledSession] = []
+    @Published var currentStreak: Int = 0
+    @Published var longestStreak: Int = 0
 
     private let hapticEngine = HapticEngine.shared
     private var sessionTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private let healthStore = HKHealthStore()
+    private var extendedRuntimeSession: WKExtendedRuntimeSession?
 
     private let userDefaults = UserDefaults.standard
     private let intensityKey = "neurocore.intensity"
     private let durationKey = "neurocore.duration"
     private let sessionsKey = "neurocore.sessions"
+    private let favoritesKey = "neurocore.favorites"
+    private let scheduledKey = "neurocore.scheduled"
+    private let streakKey = "neurocore.streak"
+    private let longestStreakKey = "neurocore.longestStreak"
+    private let lastSessionDateKey = "neurocore.lastSessionDate"
 
     init() {
         loadUserPreferences()
         loadSessionHistory()
+        loadFavorites()
+        loadScheduledSessions()
+        loadStreakData()
         setupHealthKit()
+        requestNotificationPermission()
     }
+
+    // MARK: - Session Control
 
     func startSession(mode: VibeMode) {
         stopSession()
@@ -52,8 +69,9 @@ class SessionManager: ObservableObject {
         sessionTimer?.invalidate()
         sessionTimer = nil
         hapticEngine.stop()
+        endExtendedRuntime()
 
-        if let session = activeSession {
+        if activeSession != nil {
             let record = SessionRecord(
                 mode: currentMode?.name ?? "Unknown",
                 category: currentMode?.category.rawValue ?? "Unknown",
@@ -62,6 +80,7 @@ class SessionManager: ObservableObject {
                 completedAt: Date()
             )
             saveSessionRecord(record)
+            updateStreak()
         }
 
         activeSession = nil
@@ -104,6 +123,8 @@ class SessionManager: ObservableObject {
         saveUserPreferences()
     }
 
+    // MARK: - Time Formatting
+
     var remainingTime: TimeInterval {
         max(0, duration - elapsedTime)
     }
@@ -127,6 +148,8 @@ class SessionManager: ObservableObject {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
+    // MARK: - Session Timer
+
     private func startSessionTimer() {
         sessionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self, !self.isPaused else { return }
@@ -148,6 +171,235 @@ class SessionManager: ObservableObject {
 
         stopSession()
     }
+
+    // MARK: - Favorites
+
+    func toggleFavorite(mode: VibeMode) {
+        if favorites.contains(mode.name) {
+            favorites.removeAll { $0 == mode.name }
+        } else {
+            favorites.append(mode.name)
+        }
+        saveFavorites()
+    }
+
+    func isFavorite(mode: VibeMode) -> Bool {
+        favorites.contains(mode.name)
+    }
+
+    var favoriteModes: [VibeMode] {
+        VibeMode.allModes.filter { favorites.contains($0.name) }
+    }
+
+    private func loadFavorites() {
+        favorites = userDefaults.stringArray(forKey: favoritesKey) ?? []
+    }
+
+    private func saveFavorites() {
+        userDefaults.set(favorites, forKey: favoritesKey)
+    }
+
+    // MARK: - Smart Recommendations
+
+    func recommendedMode() -> VibeMode {
+        let hour = Calendar.current.component(.hour, from: Date())
+
+        switch hour {
+        case 5..<9:
+            return VibeMode.allModes.first { $0.pattern == .energy } ?? VibeMode.allModes[0]
+        case 9..<12:
+            return VibeMode.allModes.first { $0.pattern == .focus } ?? VibeMode.allModes[0]
+        case 12..<14:
+            return VibeMode.allModes.first { $0.pattern == .social } ?? VibeMode.allModes[0]
+        case 14..<18:
+            return VibeMode.allModes.first { $0.pattern == .flow } ?? VibeMode.allModes[0]
+        case 18..<20:
+            return VibeMode.allModes.first { $0.pattern == .unwind } ?? VibeMode.allModes[0]
+        case 20..<22:
+            return VibeMode.allModes.first { $0.pattern == .calm } ?? VibeMode.allModes[0]
+        case 22..<24, 0..<5:
+            return VibeMode.allModes.first { $0.pattern == .sleep } ?? VibeMode.allModes[0]
+        default:
+            return VibeMode.allModes.first { $0.pattern == .calm } ?? VibeMode.allModes[0]
+        }
+    }
+
+    func recommendationReason() -> String {
+        let hour = Calendar.current.component(.hour, from: Date())
+
+        switch hour {
+        case 5..<9:
+            return "Good morning! Boost your energy to start the day."
+        case 9..<12:
+            return "Peak focus time. Enhance your concentration."
+        case 12..<14:
+            return "Midday break. Feel engaged and social."
+        case 14..<18:
+            return "Afternoon productivity. Enter your flow state."
+        case 18..<20:
+            return "Evening wind-down. Release the day's tension."
+        case 20..<22:
+            return "Relaxation time. Ease into calm."
+        case 22..<24, 0..<5:
+            return "Bedtime. Gentle vibes for better sleep."
+        default:
+            return "Take a moment to relax."
+        }
+    }
+
+    // MARK: - Scheduled Sessions
+
+    func scheduleSession(mode: VibeMode, time: Date, repeatDays: Set<Int>) {
+        let scheduled = ScheduledSession(
+            modeName: mode.name,
+            time: time,
+            repeatDays: repeatDays,
+            isEnabled: true
+        )
+        scheduledSessions.append(scheduled)
+        saveScheduledSessions()
+        scheduleNotification(for: scheduled)
+    }
+
+    func removeScheduledSession(at index: Int) {
+        guard index < scheduledSessions.count else { return }
+        let session = scheduledSessions[index]
+        cancelNotification(for: session)
+        scheduledSessions.remove(at: index)
+        saveScheduledSessions()
+    }
+
+    func toggleScheduledSession(at index: Int) {
+        guard index < scheduledSessions.count else { return }
+        scheduledSessions[index].isEnabled.toggle()
+        saveScheduledSessions()
+
+        if scheduledSessions[index].isEnabled {
+            scheduleNotification(for: scheduledSessions[index])
+        } else {
+            cancelNotification(for: scheduledSessions[index])
+        }
+    }
+
+    private func loadScheduledSessions() {
+        if let data = userDefaults.data(forKey: scheduledKey),
+           let sessions = try? JSONDecoder().decode([ScheduledSession].self, from: data) {
+            scheduledSessions = sessions
+        }
+    }
+
+    private func saveScheduledSessions() {
+        if let data = try? JSONEncoder().encode(scheduledSessions) {
+            userDefaults.set(data, forKey: scheduledKey)
+        }
+    }
+
+    // MARK: - Notifications
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    private func scheduleNotification(for session: ScheduledSession) {
+        let content = UNMutableNotificationContent()
+        content.title = "NeuroCore"
+        content.body = "Time for your \(session.modeName) session"
+        content.sound = .default
+
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.hour, .minute], from: session.time)
+
+        if session.repeatDays.isEmpty {
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            let request = UNNotificationRequest(identifier: session.id.uuidString, content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request)
+        } else {
+            for day in session.repeatDays {
+                var dayComponents = components
+                dayComponents.weekday = day
+                let trigger = UNCalendarNotificationTrigger(dateMatching: dayComponents, repeats: true)
+                let request = UNNotificationRequest(identifier: "\(session.id.uuidString)-\(day)", content: content, trigger: trigger)
+                UNUserNotificationCenter.current().add(request)
+            }
+        }
+    }
+
+    private func cancelNotification(for session: ScheduledSession) {
+        var identifiers = [session.id.uuidString]
+        for day in 1...7 {
+            identifiers.append("\(session.id.uuidString)-\(day)")
+        }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
+    }
+
+    // MARK: - Streak Tracking
+
+    private func loadStreakData() {
+        currentStreak = userDefaults.integer(forKey: streakKey)
+        longestStreak = userDefaults.integer(forKey: longestStreakKey)
+        checkStreakContinuity()
+    }
+
+    private func checkStreakContinuity() {
+        guard let lastDateData = userDefaults.object(forKey: lastSessionDateKey) as? Date else {
+            currentStreak = 0
+            return
+        }
+
+        let calendar = Calendar.current
+        let daysSinceLastSession = calendar.dateComponents([.day], from: lastDateData, to: Date()).day ?? 0
+
+        if daysSinceLastSession > 1 {
+            currentStreak = 0
+            saveStreakData()
+        }
+    }
+
+    private func updateStreak() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        if let lastDate = userDefaults.object(forKey: lastSessionDateKey) as? Date {
+            let lastDay = calendar.startOfDay(for: lastDate)
+
+            if lastDay == today {
+                return
+            } else if calendar.isDate(lastDay, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: today)!) {
+                currentStreak += 1
+            } else {
+                currentStreak = 1
+            }
+        } else {
+            currentStreak = 1
+        }
+
+        if currentStreak > longestStreak {
+            longestStreak = currentStreak
+        }
+
+        userDefaults.set(today, forKey: lastSessionDateKey)
+        saveStreakData()
+    }
+
+    private func saveStreakData() {
+        userDefaults.set(currentStreak, forKey: streakKey)
+        userDefaults.set(longestStreak, forKey: longestStreakKey)
+    }
+
+    // MARK: - Extended Runtime
+
+    private func requestExtendedRuntime() {
+        extendedRuntimeSession = WKExtendedRuntimeSession()
+        extendedRuntimeSession?.delegate = ExtendedRuntimeDelegate.shared
+        extendedRuntimeSession?.start()
+    }
+
+    private func endExtendedRuntime() {
+        extendedRuntimeSession?.invalidate()
+        extendedRuntimeSession = nil
+    }
+
+    // MARK: - Persistence
 
     private func loadUserPreferences() {
         if let savedIntensity = userDefaults.object(forKey: intensityKey) as? Double {
@@ -181,6 +433,8 @@ class SessionManager: ObservableObject {
         }
     }
 
+    // MARK: - HealthKit
+
     private func setupHealthKit() {
         guard HKHealthStore.isHealthDataAvailable() else { return }
 
@@ -189,16 +443,7 @@ class SessionManager: ObservableObject {
             HKQuantityType.quantityType(forIdentifier: .heartRate)!
         ]
 
-        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { success, error in
-            if success {
-                print("HealthKit authorization granted")
-            }
-        }
-    }
-
-    private func requestExtendedRuntime() {
-        let session = WKExtendedRuntimeSession()
-        session.start()
+        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { _, _ in }
     }
 
     func fetchRecentHRV(completion: @escaping (Double?) -> Void) {
@@ -228,6 +473,8 @@ class SessionManager: ObservableObject {
         healthStore.execute(query)
     }
 
+    // MARK: - Statistics
+
     func totalSessionTime(last days: Int = 7) -> TimeInterval {
         let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
         return recentSessions
@@ -239,7 +486,25 @@ class SessionManager: ObservableObject {
         let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
         return recentSessions.filter { $0.completedAt >= cutoff }.count
     }
+
+    func averageSessionDuration(last days: Int = 7) -> TimeInterval {
+        let count = sessionsCount(last: days)
+        guard count > 0 else { return 0 }
+        return totalSessionTime(last: days) / Double(count)
+    }
+
+    func mostUsedMode(last days: Int = 7) -> String? {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        let recentModes = recentSessions
+            .filter { $0.completedAt >= cutoff }
+            .map { $0.mode }
+
+        let counts = recentModes.reduce(into: [:]) { $0[$1, default: 0] += 1 }
+        return counts.max(by: { $0.value < $1.value })?.key
+    }
 }
+
+// MARK: - Supporting Types
 
 struct VibeSession {
     let id = UUID()
@@ -280,5 +545,64 @@ struct SessionRecord: Codable, Identifiable {
         formatter.dateStyle = .short
         formatter.timeStyle = .short
         return formatter.string(from: completedAt)
+    }
+}
+
+struct ScheduledSession: Codable, Identifiable {
+    let id: UUID
+    let modeName: String
+    let time: Date
+    let repeatDays: Set<Int>
+    var isEnabled: Bool
+
+    init(modeName: String, time: Date, repeatDays: Set<Int>, isEnabled: Bool) {
+        self.id = UUID()
+        self.modeName = modeName
+        self.time = time
+        self.repeatDays = repeatDays
+        self.isEnabled = isEnabled
+    }
+
+    var formattedTime: String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: time)
+    }
+
+    var repeatDescription: String {
+        if repeatDays.isEmpty {
+            return "Once"
+        }
+
+        let dayNames = ["", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        let sortedDays = repeatDays.sorted()
+
+        if sortedDays == [1, 2, 3, 4, 5, 6, 7] {
+            return "Every day"
+        } else if sortedDays == [2, 3, 4, 5, 6] {
+            return "Weekdays"
+        } else if sortedDays == [1, 7] {
+            return "Weekends"
+        }
+
+        return sortedDays.map { dayNames[$0] }.joined(separator: ", ")
+    }
+}
+
+// MARK: - Extended Runtime Delegate
+
+class ExtendedRuntimeDelegate: NSObject, WKExtendedRuntimeSessionDelegate {
+    static let shared = ExtendedRuntimeDelegate()
+
+    func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession, didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: Error?) {
+        // Session ended
+    }
+
+    func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        // Session started
+    }
+
+    func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        // Session about to expire - haptics will stop
     }
 }

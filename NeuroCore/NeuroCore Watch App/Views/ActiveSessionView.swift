@@ -110,52 +110,52 @@ struct ActiveSessionView: View {
     }
 
     private func controlButtons(mode: VibeMode) -> some View {
-        HStack(spacing: 20) {
-            Button(action: adjustIntensityDown) {
-                Image(systemName: "minus.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(PlainButtonStyle())
-
-            Button(action: { sessionManager.togglePause() }) {
-                ZStack {
-                    Circle()
-                        .fill(mode.color)
-                        .frame(width: 50, height: 50)
-
-                    Image(systemName: sessionManager.isPaused ? "play.fill" : "pause.fill")
-                        .font(.title3)
-                        .foregroundColor(.white)
+        VStack(spacing: 12) {
+            HStack(spacing: 20) {
+                Button(action: adjustIntensityDown) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
                 }
-            }
-            .buttonStyle(PlainButtonStyle())
+                .buttonStyle(PlainButtonStyle())
 
-            Button(action: adjustIntensityUp) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.secondary)
+                Button(action: { sessionManager.togglePause() }) {
+                    ZStack {
+                        Circle()
+                            .fill(mode.color)
+                            .frame(width: 50, height: 50)
+
+                        Image(systemName: sessionManager.isPaused ? "play.fill" : "pause.fill")
+                            .font(.title3)
+                            .foregroundColor(.white)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button(action: adjustIntensityUp) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+
+            Button(action: { showStopConfirmation = true }) {
+                HStack {
+                    Image(systemName: "stop.fill")
+                    Text("Stop")
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .stroke(Color.red, lineWidth: 1)
+                )
             }
             .buttonStyle(PlainButtonStyle())
         }
-        .padding(.top, 8)
-
-        Button(action: { showStopConfirmation = true }) {
-            HStack {
-                Image(systemName: "stop.fill")
-                Text("Stop")
-            }
-            .font(.caption)
-            .foregroundColor(.red)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .stroke(Color.red, lineWidth: 1)
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-        .padding(.top, 4)
     }
 
     private func adjustIntensityDown() {
