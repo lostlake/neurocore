@@ -438,6 +438,13 @@ class SessionManager: ObservableObject {
     private func requestExtendedRuntime() {
         extendedRuntimeSession = WKExtendedRuntimeSession()
         extendedRuntimeSession?.delegate = ExtendedRuntimeDelegate.shared
+
+        // Handle session expiring (30 min limit approaching)
+        ExtendedRuntimeDelegate.shared.onSessionExpiring = { [weak self] in
+            // Session will expire soon - haptics will only work in foreground after this
+            self?.objectWillChange.send()
+        }
+
         extendedRuntimeSession?.start()
     }
 
@@ -662,18 +669,53 @@ struct ScheduledSession: Codable, Identifiable {
 
 // MARK: - Extended Runtime Delegate
 
+/// Handles watchOS extended runtime session lifecycle.
+///
+/// ## Important Limitation:
+/// watchOS limits self-care extended runtime sessions to approximately 30 minutes.
+/// After this time, the session will be invalidated and haptics will stop.
+/// For longer sessions, haptics will only work while the app is in the foreground.
+///
 class ExtendedRuntimeDelegate: NSObject, WKExtendedRuntimeSessionDelegate {
     static let shared = ExtendedRuntimeDelegate()
 
+    var onSessionExpiring: (() -> Void)?
+    var onSessionInvalidated: ((WKExtendedRuntimeSessionInvalidationReason) -> Void)?
+
     func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession, didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: Error?) {
-        // Session ended
+        DispatchQueue.main.async {
+            self.onSessionInvalidated?(reason)
+        }
+
+        // Log the reason for debugging
+        switch reason {
+        case .none:
+            print("Extended runtime ended normally")
+        case .sessionInProgress:
+            print("Extended runtime: another session in progress")
+        case .error:
+            print("Extended runtime error: \(error?.localizedDescription ?? "unknown")")
+        case .expired:
+            print("Extended runtime expired (30 min limit reached)")
+        case .resignedFrontmost:
+            print("Extended runtime: app resigned frontmost")
+        case .insufficientlyActive:
+            print("Extended runtime: insufficiently active")
+        @unknown default:
+            print("Extended runtime ended: unknown reason")
+        }
     }
 
     func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
-        // Session started
+        print("Extended runtime session started - haptics enabled in background")
     }
 
     func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
-        // Session about to expire - haptics will stop
+        // Notify user that background haptics are about to stop
+        DispatchQueue.main.async {
+            WKInterfaceDevice.current().play(.notification)
+            self.onSessionExpiring?()
+        }
+        print("Extended runtime expiring soon - haptics will stop in background")
     }
 }

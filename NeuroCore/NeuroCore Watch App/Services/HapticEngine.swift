@@ -2,6 +2,15 @@ import Foundation
 import WatchKit
 import Combine
 
+/// HapticEngine provides rhythmic haptic feedback patterns for wellness sessions.
+///
+/// ## Important watchOS Limitations:
+/// - Apple Watch only supports predefined `WKHapticType` values (no custom waveforms)
+/// - True vibration frequency/intensity cannot be controlled directly
+/// - We approximate Apollo Neuro patterns by timing discrete haptic events
+/// - Haptics may be rate-limited if called too frequently (minimum ~50ms between calls)
+/// - Extended runtime sessions are limited to ~30 minutes for self-care activities
+///
 class HapticEngine: ObservableObject {
     static let shared = HapticEngine()
 
@@ -19,6 +28,10 @@ class HapticEngine: ObservableObject {
     private var breathDirection: Double = 1
 
     private let device = WKInterfaceDevice.current()
+
+    // Rate limiting - watchOS may ignore haptics called too frequently
+    private var lastHapticTime: Date = .distantPast
+    private let minimumHapticInterval: TimeInterval = 0.08 // 80ms minimum between haptics
 
     private init() {}
 
@@ -99,7 +112,8 @@ class HapticEngine: ObservableObject {
     }
 
     private func scheduleBreathModulation(for sequence: VibrationSequence) {
-        let modulationInterval = 0.1
+        // Use longer intervals to avoid rate limiting (300-500ms is safer for watchOS)
+        let modulationInterval = 0.4
         let config = sequence.pattern.config
 
         hapticTimer = Timer.scheduledTimer(withTimeInterval: modulationInterval, repeats: true) { [weak self] _ in
@@ -138,8 +152,11 @@ class HapticEngine: ObservableObject {
     }
 
     private func playSubtleHaptic(intensity: Double) {
+        guard canPlayHaptic() else { return }
+
         if intensity > 0.3 {
             device.play(.click)
+            lastHapticTime = Date()
         }
     }
 
@@ -147,15 +164,25 @@ class HapticEngine: ObservableObject {
         let scaledIntensity = event.intensity * intensity
 
         guard scaledIntensity > 0.1 else { return }
+        guard canPlayHaptic() else { return }
 
         let hapticType = selectHapticType(for: event.type, intensity: scaledIntensity)
         device.play(hapticType)
+        lastHapticTime = Date()
 
+        // For stronger feedback, add a follow-up tap (with proper delay for rate limiting)
         if scaledIntensity > 0.7 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                self?.device.play(.click)
+            DispatchQueue.main.asyncAfter(deadline: .now() + minimumHapticInterval) { [weak self] in
+                guard let self = self, self.isPlaying, self.canPlayHaptic() else { return }
+                self.device.play(.click)
+                self.lastHapticTime = Date()
             }
         }
+    }
+
+    /// Check if enough time has passed since the last haptic to avoid rate limiting
+    private func canPlayHaptic() -> Bool {
+        return Date().timeIntervalSince(lastHapticTime) >= minimumHapticInterval
     }
 
     private func selectHapticType(for type: WKHapticType, intensity: Double) -> WKHapticType {
