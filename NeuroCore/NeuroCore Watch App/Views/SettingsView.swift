@@ -19,6 +19,8 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                adaptiveModeSection
+
                 defaultsSection
 
                 scheduledSection
@@ -35,6 +37,102 @@ struct SettingsView: View {
         .onAppear {
             defaultIntensity = sessionManager.intensity
             defaultDuration = sessionManager.duration
+        }
+    }
+
+    private var adaptiveModeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Adaptive Mode")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+
+            VStack(spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .foregroundColor(.yellow)
+                            Text("Biometric Adaptive")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                        }
+
+                        Text("Auto-adjusts intensity based on heart rate and HRV")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+
+                    Button(action: {
+                        sessionManager.toggleAdaptiveMode()
+                    }) {
+                        Image(systemName: sessionManager.adaptiveModeEnabled ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundColor(sessionManager.adaptiveModeEnabled ? .green : .secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+
+                if sessionManager.adaptiveModeEnabled {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Current Status")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+
+                        HStack(spacing: 12) {
+                            // Heart Rate
+                            HStack(spacing: 4) {
+                                Image(systemName: "heart.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.red)
+                                Text("\(Int(sessionManager.biometricMonitor.currentHeartRate)) BPM")
+                                    .font(.caption2)
+                            }
+
+                            // HRV
+                            HStack(spacing: 4) {
+                                Image(systemName: "waveform.path.ecg")
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                                Text("\(Int(sessionManager.biometricMonitor.currentHRV)) ms")
+                                    .font(.caption2)
+                            }
+                        }
+
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(stressLevelColor)
+                                .frame(width: 8, height: 8)
+                            Text("Stress: \(sessionManager.biometricMonitor.stressLevel.rawValue)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.gray.opacity(0.15))
+            )
+        }
+    }
+
+    private var stressLevelColor: Color {
+        switch sessionManager.biometricMonitor.stressLevel {
+        case .low: return .green
+        case .moderate: return .yellow
+        case .high: return .orange
+        case .veryHigh: return .red
+        case .unknown: return .gray
         }
     }
 

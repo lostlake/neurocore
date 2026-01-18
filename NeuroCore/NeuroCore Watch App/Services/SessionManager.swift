@@ -18,8 +18,15 @@ class SessionManager: ObservableObject {
     @Published var currentStreak: Int = 0
     @Published var longestStreak: Int = 0
 
+    // Adaptive Mode
+    @Published var adaptiveModeEnabled: Bool = true
+    @Published var currentAdaptiveIntensity: Double = 0.5
+    @Published var lastBiometricUpdate: Date?
+
     private let hapticEngine = HapticEngine.shared
+    let biometricMonitor = BiometricMonitor.shared
     private var sessionTimer: Timer?
+    private var adaptiveTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private let healthStore = HKHealthStore()
     private var extendedRuntimeSession: WKExtendedRuntimeSession?
@@ -33,6 +40,7 @@ class SessionManager: ObservableObject {
     private let streakKey = "neurocore.streak"
     private let longestStreakKey = "neurocore.longestStreak"
     private let lastSessionDateKey = "neurocore.lastSessionDate"
+    private let adaptiveModeKey = "neurocore.adaptiveMode"
 
     init() {
         loadUserPreferences()
@@ -42,6 +50,31 @@ class SessionManager: ObservableObject {
         loadStreakData()
         setupHealthKit()
         requestNotificationPermission()
+        setupBiometricObserver()
+    }
+
+    private func setupBiometricObserver() {
+        biometricMonitor.$adaptiveIntensityAdjustment
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] adjustment in
+                self?.updateAdaptiveIntensity()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func updateAdaptiveIntensity() {
+        guard adaptiveModeEnabled, isSessionActive, let mode = currentMode else { return }
+
+        let adaptedIntensity = biometricMonitor.getAdaptiveIntensity(
+            baseIntensity: intensity,
+            mode: mode
+        )
+
+        if abs(adaptedIntensity - currentAdaptiveIntensity) > 0.02 {
+            currentAdaptiveIntensity = adaptedIntensity
+            hapticEngine.updateIntensity(currentAdaptiveIntensity)
+            lastBiometricUpdate = Date()
+        }
     }
 
     // MARK: - Session Control
@@ -50,33 +83,46 @@ class SessionManager: ObservableObject {
         stopSession()
 
         currentMode = mode
+        currentAdaptiveIntensity = intensity
         activeSession = VibeSession(mode: mode, intensity: intensity, duration: duration)
         isSessionActive = true
         isPaused = false
         elapsedTime = 0
 
+        let startingIntensity = adaptiveModeEnabled ? currentAdaptiveIntensity : intensity
+
         hapticEngine.start(
             pattern: mode.pattern,
-            intensity: intensity,
+            intensity: startingIntensity,
             duration: duration
         )
 
         startSessionTimer()
         requestExtendedRuntime()
+
+        if adaptiveModeEnabled {
+            biometricMonitor.startMonitoring()
+        }
     }
 
     func stopSession() {
         sessionTimer?.invalidate()
         sessionTimer = nil
+        adaptiveTimer?.invalidate()
+        adaptiveTimer = nil
         hapticEngine.stop()
         endExtendedRuntime()
+
+        if adaptiveModeEnabled {
+            biometricMonitor.stopMonitoring()
+        }
 
         if activeSession != nil {
             let record = SessionRecord(
                 mode: currentMode?.name ?? "Unknown",
                 category: currentMode?.category.rawValue ?? "Unknown",
                 duration: elapsedTime,
-                intensity: intensity,
+                intensity: adaptiveModeEnabled ? currentAdaptiveIntensity : intensity,
                 completedAt: Date()
             )
             saveSessionRecord(record)
@@ -88,6 +134,7 @@ class SessionManager: ObservableObject {
         currentMode = nil
         elapsedTime = 0
         isPaused = false
+        lastBiometricUpdate = nil
     }
 
     func pauseSession() {
@@ -404,15 +451,39 @@ class SessionManager: ObservableObject {
     private func loadUserPreferences() {
         if let savedIntensity = userDefaults.object(forKey: intensityKey) as? Double {
             intensity = savedIntensity
+            currentAdaptiveIntensity = savedIntensity
         }
         if let savedDuration = userDefaults.object(forKey: durationKey) as? Double {
             duration = savedDuration
+        }
+        if let savedAdaptive = userDefaults.object(forKey: adaptiveModeKey) as? Bool {
+            adaptiveModeEnabled = savedAdaptive
         }
     }
 
     private func saveUserPreferences() {
         userDefaults.set(intensity, forKey: intensityKey)
         userDefaults.set(duration, forKey: durationKey)
+        userDefaults.set(adaptiveModeEnabled, forKey: adaptiveModeKey)
+    }
+
+    func toggleAdaptiveMode() {
+        adaptiveModeEnabled.toggle()
+        saveUserPreferences()
+
+        if isSessionActive {
+            if adaptiveModeEnabled {
+                biometricMonitor.startMonitoring()
+            } else {
+                biometricMonitor.stopMonitoring()
+                currentAdaptiveIntensity = intensity
+                hapticEngine.updateIntensity(intensity)
+            }
+        }
+    }
+
+    var effectiveIntensity: Double {
+        adaptiveModeEnabled ? currentAdaptiveIntensity : intensity
     }
 
     private func loadSessionHistory() {

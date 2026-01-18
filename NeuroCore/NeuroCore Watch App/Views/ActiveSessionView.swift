@@ -4,9 +4,14 @@ import WatchKit
 struct ActiveSessionView: View {
     @EnvironmentObject var sessionManager: SessionManager
     @State private var showStopConfirmation = false
+    @State private var showBiometricDetail = false
     @Environment(\.isLuminanceReduced) var isLuminanceReduced
 
     private let device = WKInterfaceDevice.current()
+
+    private var biometricMonitor: BiometricMonitor {
+        sessionManager.biometricMonitor
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -29,6 +34,10 @@ struct ActiveSessionView: View {
 
                         timeDisplay
 
+                        if sessionManager.adaptiveModeEnabled {
+                            biometricDisplay(mode: mode)
+                        }
+
                         controlButtons(mode: mode)
                     }
                 }
@@ -47,6 +56,70 @@ struct ActiveSessionView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .sheet(isPresented: $showBiometricDetail) {
+            if let mode = sessionManager.currentMode {
+                BiometricDetailView(mode: mode)
+            }
+        }
+    }
+
+    private func biometricDisplay(mode: VibeMode) -> some View {
+        Button(action: { showBiometricDetail = true }) {
+            VStack(spacing: 6) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(biometricMonitor.stressLevel.color)
+                        .frame(width: 8, height: 8)
+
+                    Text(biometricMonitor.stressLevel.rawValue)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(biometricMonitor.stressLevel.color)
+                }
+
+                HStack(spacing: 12) {
+                    // Heart Rate
+                    HStack(spacing: 3) {
+                        Image(systemName: "heart.fill")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                        Text("\(Int(biometricMonitor.currentHeartRate))")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                    }
+
+                    // HRV
+                    HStack(spacing: 3) {
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                        Text("\(Int(biometricMonitor.currentHRV))ms")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                    }
+                }
+                .foregroundColor(.secondary)
+
+                // Adaptive Intensity Indicator
+                HStack(spacing: 4) {
+                    Image(systemName: "sparkles")
+                        .font(.caption2)
+                        .foregroundColor(.yellow)
+                    Text("Adaptive: \(Int(sessionManager.effectiveIntensity * 100))%")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.gray.opacity(0.15))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel("Biometric data: \(biometricMonitor.stressLevel.rawValue), heart rate \(Int(biometricMonitor.currentHeartRate)), HRV \(Int(biometricMonitor.currentHRV)) milliseconds")
+        .accessibilityHint("Tap for more details")
     }
 
     private func sessionHeader(mode: VibeMode) -> some View {
@@ -240,6 +313,216 @@ struct PulsingAnimation: View {
         )
         .onAppear {
             isPulsing = true
+        }
+    }
+}
+
+// MARK: - Biometric Detail View
+
+struct BiometricDetailView: View {
+    @EnvironmentObject var sessionManager: SessionManager
+    @Environment(\.dismiss) var dismiss
+
+    let mode: VibeMode
+
+    private var biometricMonitor: BiometricMonitor {
+        sessionManager.biometricMonitor
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                Text("Biometric Data")
+                    .font(.headline)
+                    .padding(.top, 8)
+
+                // Stress Level Card
+                VStack(spacing: 8) {
+                    HStack {
+                        Circle()
+                            .fill(biometricMonitor.stressLevel.color)
+                            .frame(width: 12, height: 12)
+
+                        Text(biometricMonitor.stressLevel.rawValue)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(biometricMonitor.stressLevel.color)
+
+                        Spacer()
+                    }
+
+                    Text(biometricMonitor.stressLevel.description)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(biometricMonitor.stressLevel.color.opacity(0.15))
+                )
+
+                // Metrics Grid
+                HStack(spacing: 12) {
+                    MetricBox(
+                        icon: "heart.fill",
+                        iconColor: .red,
+                        value: "\(Int(biometricMonitor.currentHeartRate))",
+                        unit: "BPM",
+                        label: "Heart Rate"
+                    )
+
+                    MetricBox(
+                        icon: "waveform.path.ecg",
+                        iconColor: .green,
+                        value: "\(Int(biometricMonitor.currentHRV))",
+                        unit: "ms",
+                        label: "HRV"
+                    )
+                }
+
+                // Adaptive Intensity
+                VStack(spacing: 8) {
+                    HStack {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.yellow)
+                        Text("Adaptive Intensity")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                        Spacer()
+                    }
+
+                    HStack {
+                        Text("Base: \(Int(sessionManager.intensity * 100))%")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        Text("Effective: \(Int(sessionManager.effectiveIntensity * 100))%")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(mode.color)
+                    }
+
+                    Text(adaptiveExplanation)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.gray.opacity(0.15))
+                )
+
+                // Toggle Adaptive Mode
+                Button(action: {
+                    sessionManager.toggleAdaptiveMode()
+                }) {
+                    HStack {
+                        Image(systemName: sessionManager.adaptiveModeEnabled ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(sessionManager.adaptiveModeEnabled ? .green : .secondary)
+                        Text(sessionManager.adaptiveModeEnabled ? "Adaptive On" : "Adaptive Off")
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button("Done") {
+                    dismiss()
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.top, 8)
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    private var adaptiveExplanation: String {
+        switch biometricMonitor.stressLevel {
+        case .low:
+            return "You're relaxed. Intensity lowered for gentle maintenance."
+        case .moderate:
+            return "Moderate stress detected. Maintaining base intensity."
+        case .high:
+            return "Elevated stress. Intensity increased to help you relax."
+        case .veryHigh:
+            return "High stress detected. Maximum therapeutic intensity applied."
+        case .unknown:
+            return "Gathering biometric data..."
+        }
+    }
+}
+
+struct MetricBox: View {
+    let icon: String
+    let iconColor: Color
+    let value: String
+    let unit: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(iconColor)
+
+            HStack(spacing: 2) {
+                Text(value)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                Text(unit)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.gray.opacity(0.15))
+        )
+    }
+}
+
+// MARK: - Stress Level Color Extension
+
+extension BiometricMonitor.StressLevel {
+    var color: Color {
+        switch self {
+        case .low:
+            return .green
+        case .moderate:
+            return .yellow
+        case .high:
+            return .orange
+        case .veryHigh:
+            return .red
+        case .unknown:
+            return .gray
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .low:
+            return "Your body shows signs of relaxation. Great job!"
+        case .moderate:
+            return "Normal stress levels. The session is working."
+        case .high:
+            return "Elevated stress detected. Focus on your breathing."
+        case .veryHigh:
+            return "High stress detected. Let the vibrations guide you to calm."
+        case .unknown:
+            return "Measuring your biometrics..."
         }
     }
 }
