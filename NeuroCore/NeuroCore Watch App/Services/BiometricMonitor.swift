@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import Combine
+import SwiftUI
 
 class BiometricMonitor: ObservableObject {
     static let shared = BiometricMonitor()
@@ -29,13 +30,13 @@ class BiometricMonitor: ObservableObject {
         case veryHigh = "Very Stressed"
         case unknown = "Measuring..."
 
-        var color: String {
+        var color: Color {
             switch self {
-            case .low: return "green"
-            case .moderate: return "yellow"
-            case .high: return "orange"
-            case .veryHigh: return "red"
-            case .unknown: return "gray"
+            case .low: return .green
+            case .moderate: return .yellow
+            case .high: return .orange
+            case .veryHigh: return .red
+            case .unknown: return .gray
             }
         }
 
@@ -56,6 +57,21 @@ class BiometricMonitor: ObservableObject {
             case .high: return 1.15
             case .veryHigh: return 1.3
             case .unknown: return 1.0
+            }
+        }
+
+        var description: String {
+            switch self {
+            case .low:
+                return "Your body shows signs of relaxation. Great job!"
+            case .moderate:
+                return "Normal stress levels. The session is working."
+            case .high:
+                return "Elevated stress detected. Focus on your breathing."
+            case .veryHigh:
+                return "High stress detected. Let the vibrations guide you to calm."
+            case .unknown:
+                return "Measuring your biometrics..."
             }
         }
     }

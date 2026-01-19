@@ -493,40 +493,6 @@ struct MetricBox: View {
     }
 }
 
-// MARK: - Stress Level Color Extension
-
-extension BiometricMonitor.StressLevel {
-    var color: Color {
-        switch self {
-        case .low:
-            return .green
-        case .moderate:
-            return .yellow
-        case .high:
-            return .orange
-        case .veryHigh:
-            return .red
-        case .unknown:
-            return .gray
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .low:
-            return "Your body shows signs of relaxation. Great job!"
-        case .moderate:
-            return "Normal stress levels. The session is working."
-        case .high:
-            return "Elevated stress detected. Focus on your breathing."
-        case .veryHigh:
-            return "High stress detected. Let the vibrations guide you to calm."
-        case .unknown:
-            return "Measuring your biometrics..."
-        }
-    }
-}
-
 #Preview {
     let manager = SessionManager()
     manager.startSession(mode: VibeMode.allModes[0])
