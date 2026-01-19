@@ -17,6 +17,8 @@
 		A1000008 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* SettingsView.swift */; };
 		A1000009 /* VibrationPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* VibrationPatterns.swift */; };
 		A1000010 /* ActiveSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* ActiveSessionView.swift */; };
+		A1000011 /* BiometricMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* BiometricMonitor.swift */; };
+		A1000012 /* ComplicationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000012 /* ComplicationController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +32,8 @@
 		A2000008 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A2000009 /* VibrationPatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibrationPatterns.swift; sourceTree = "<group>"; };
 		A2000010 /* ActiveSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveSessionView.swift; sourceTree = "<group>"; };
+		A2000011 /* BiometricMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricMonitor.swift; sourceTree = "<group>"; };
+		A2000012 /* ComplicationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplicationController.swift; sourceTree = "<group>"; };
 		A3000001 /* NeuroCore Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "NeuroCore Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -58,6 +62,7 @@
 			children = (
 				A2000001 /* NeuroCoreApp.swift */,
 				A2000002 /* ContentView.swift */,
+				A2000012 /* ComplicationController.swift */,
 				A5000004 /* Models */,
 				A5000005 /* Views */,
 				A5000006 /* Services */,
@@ -99,6 +104,7 @@
 			children = (
 				A2000004 /* HapticEngine.swift */,
 				A2000006 /* SessionManager.swift */,
+				A2000011 /* BiometricMonitor.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -181,6 +187,8 @@
 				A1000008 /* SettingsView.swift in Sources */,
 				A1000009 /* VibrationPatterns.swift in Sources */,
 				A1000010 /* ActiveSessionView.swift in Sources */,
+				A1000011 /* BiometricMonitor.swift in Sources */,
+				A1000012 /* ComplicationController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
