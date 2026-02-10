@@ -90,11 +90,16 @@ class BiometricMonitor: ObservableObject {
             return
         }
 
-        let typesToRead: Set<HKObjectType> = [
-            HKQuantityType.quantityType(forIdentifier: .heartRate)!,
-            HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
-            HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!
-        ]
+        var typesToRead: Set<HKObjectType> = []
+        if let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate) {
+            typesToRead.insert(hrType)
+        }
+        if let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) {
+            typesToRead.insert(hrvType)
+        }
+        if let rhrType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) {
+            typesToRead.insert(rhrType)
+        }
 
         let typesToShare: Set<HKSampleType> = [
             HKQuantityType.workoutType()
@@ -410,7 +415,10 @@ class BiometricMonitor: ObservableObject {
             return
         }
 
-        let startDate = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+        guard let startDate = Calendar.current.date(byAdding: .day, value: -7, to: Date()) else {
+            completion(nil)
+            return
+        }
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: Date(), options: .strictStartDate)
 
         let query = HKStatisticsQuery(

@@ -411,7 +411,8 @@ class SessionManager: ObservableObject {
 
             if lastDay == today {
                 return
-            } else if calendar.isDate(lastDay, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: today)!) {
+            } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+                      calendar.isDate(lastDay, inSameDayAs: yesterday) {
                 currentStreak += 1
             } else {
                 currentStreak = 1
@@ -516,11 +517,15 @@ class SessionManager: ObservableObject {
     private func setupHealthKit() {
         guard HKHealthStore.isHealthDataAvailable() else { return }
 
-        let typesToRead: Set<HKSampleType> = [
-            HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
-            HKQuantityType.quantityType(forIdentifier: .heartRate)!
-        ]
+        var typesToRead: Set<HKSampleType> = []
+        if let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) {
+            typesToRead.insert(hrvType)
+        }
+        if let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate) {
+            typesToRead.insert(hrType)
+        }
 
+        guard !typesToRead.isEmpty else { return }
         healthStore.requestAuthorization(toShare: nil, read: typesToRead) { _, _ in }
     }
 
@@ -530,7 +535,10 @@ class SessionManager: ObservableObject {
             return
         }
 
-        let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
+        guard let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN) else {
+            completion(nil)
+            return
+        }
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
 
         let query = HKSampleQuery(

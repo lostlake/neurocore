@@ -85,14 +85,11 @@ struct NeuroCoreCornerComplication: View {
     var entry: NeuroCoreEntry
 
     var body: some View {
-        ZStack {
-            Image(systemName: "waveform.circle.fill")
-                .font(.title)
-
-            Text(entry.recommendedMode)
-                .font(.caption2)
-                .widgetCurvesContent()
-        }
+        Image(systemName: "waveform.circle.fill")
+            .font(.title)
+            .widgetLabel {
+                Text(entry.recommendedMode)
+            }
     }
 }
 
